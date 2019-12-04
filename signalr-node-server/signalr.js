@@ -353,9 +353,8 @@ class HubContext {
 }
 
 class Hub {
-    _methods = new Map();
-
     constructor() {
+        this._methods = new Map();
         this._connectCallback = null;
         this._disconnectCallback = null;
         this.clients = null;
