@@ -39,7 +39,7 @@ class HubConnection {
         this._closeHandler = null;
 
         this._handshakeTimeout = setTimeout(() => {
-            if (!this._handshake) {
+            if (!this._handshake && this.connection) {
                 this.connection.close();
             }
         }, handshakeTimeoutMs);
@@ -273,10 +273,12 @@ class HubLifetimeManager {
         var client = this._clients[connection.id];
         delete this._clients[connection.id];
 
-        // Clean up groups
-        for (const group of client.groups) {
-            // REVIEW: Performance..
-            this.removeFromGroup(connection.id, group);
+        if (client) {
+            // Clean up groups
+            for (const group of client.groups) {
+                // REVIEW: Performance..
+                this.removeFromGroup(connection.id, group);
+            }
         }
     }
 }
