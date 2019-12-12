@@ -2,8 +2,11 @@
 
 <body>
     Server Time: <span id="date"></span><br />
-    <input type="text" id="message" />
-    <input type="button" value="Send" id="send" />
+    <form>
+        <input type="text" id="user" placeholder="user" required /><br />
+        <input type="text" id="message" placeholder="message" required /><br />
+        <button type="submit" id="send">Send</button>
+    </form>
     <ul id="messages">
     </ul>
 
@@ -23,15 +26,21 @@
             });
 
             document.getElementById('send').addEventListener('click', () => {
-                var val = document.getElementById('message').value;
-                if (val) {
-                    connection.invoke('SendMessage', val);
+                var user = document.getElementById('user').value;
+                var message = document.getElementById('message').value;
+                if (user && message) {
+                    connection.invoke('SendMessage', user, message);
                 }
             });
 
-            connection.on('ReceiveMessage', message => {
-                var li = document.createElement('li');
-                li.innerText = message;
+            connection.on('ReceiveMessage', (user, message) => {
+                var msg = message
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                var encodedMsg = user + ' says ' + msg
+                var li = document.createElement('li')
+                li.textContent = encodedMsg;
                 document.getElementById('messages').appendChild(li);
             });
 
