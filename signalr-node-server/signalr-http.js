@@ -1,7 +1,6 @@
 const ws = require('ws');
 const crypto = require('crypto');
 const url = require('url');
-const settings = require('./settings.json');
 const wss = new ws.Server({ noServer: true });
 
 // This should be an interface
@@ -57,13 +56,6 @@ class HttpTransport {
 
         this._httpServer.on('request', (req, res) => {
             var parsedUrl = url.parse(req.url, true);
-
-            // Set CORS headers
-            res.setHeader('Access-Control-Allow-Origin', settings.origin);
-            res.setHeader('Access-Control-Request-Method', '*');
-            res.setHeader('Access-Control-Allow-Methods', '*');
-            res.setHeader('Access-Control-Allow-Headers', 'x-requested-with,content-type');
-            res.setHeader('Access-Control-Allow-Credentials', 'true');
 
             if (this._matches(req, 'POST', parsedUrl, negotiatePath)) {
                 var bytes = crypto.randomBytes(16);
