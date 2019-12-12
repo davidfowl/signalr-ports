@@ -32,7 +32,6 @@ chat.on('disconnect', id => {
 });
 
 chat.on('SendMessage', (user, message) => {
-    console.log(user, message);
     chat.clients.all.send('ReceiveMessage', user, message);
 });
 
