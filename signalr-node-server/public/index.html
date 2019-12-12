@@ -11,7 +11,7 @@
     <script>
         (async function () {
             var connection = new signalR.HubConnectionBuilder()
-                .withUrl('/chat')
+                .withUrl('/chatHub')
                 .build();
 
             var clock = new signalR.HubConnectionBuilder()
@@ -25,11 +25,11 @@
             document.getElementById('send').addEventListener('click', () => {
                 var val = document.getElementById('message').value;
                 if (val) {
-                    connection.invoke('send', val);
+                    connection.invoke('SendMessage', val);
                 }
             });
 
-            connection.on('send', message => {
+            connection.on('ReceiveMessage', message => {
                 var li = document.createElement('li');
                 li.innerText = message;
                 document.getElementById('messages').appendChild(li);
