@@ -1,11 +1,16 @@
 # Changelog
 
+## 2019-12-12
+
+### Added
+
+- Some checks to prevent crashes (line 42 and 276 of `signalr.js`)
+
 ## 2019-12-11
 
 ### Added
 
-- CORS functionality in `app.js` and in `signalr-http.js`
-- Added `settings.json` file
+- `.prettierrc` file, `CHANGELOG.md`
 
 ### Changed
 
