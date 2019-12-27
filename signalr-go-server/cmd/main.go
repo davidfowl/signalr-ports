@@ -1,8 +1,8 @@
 package main
 
 import (
+	"../pkg/signalr"
 	"fmt"
-	"github.com/philippseith/signalr"
 	"log"
 	"net/http"
 	"strings"
@@ -94,11 +94,11 @@ func (c *chat) UploadStream(upload1 <-chan int, factor float64, upload2 <-chan f
 
 func main() {
 	router := http.NewServeMux()
-	router.Handle("/", http.FileServer(http.Dir("./public")))
+	router.Handle("/", http.FileServer(http.Dir("../public")))
 
 	signalr.MapHub(router, "/chat", &chat{})
 
-	if err := http.ListenAndServe("localhost:8087", router); err != nil {
+	if err := http.ListenAndServe("localhost:8086", router); err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
 }
