@@ -31,7 +31,7 @@ func MapHub(mux *http.ServeMux, path string, hubPrototype HubInterface) {
 			conn.start()
 			// Process messages
 			server.MessageLoop(conn, connectionID, protocol)
-			conn.close("")
+			conn.Close("")
 			// Wait for pings to complete
 			pings.Wait()
 		}

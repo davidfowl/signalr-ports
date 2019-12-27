@@ -85,7 +85,7 @@ func (c *HubConnectionBase) StreamItem(id string, item interface{}) {
 	c.Protocol.WriteMessage(streamItemMessage, c.Writer)
 }
 
-func (c *HubConnectionBase) close(error string) {
+func (c *HubConnectionBase) Close(error string) {
 	atomic.StoreInt32(&c.Connected, 0)
 
 	var closeMessage = closeMessage{
