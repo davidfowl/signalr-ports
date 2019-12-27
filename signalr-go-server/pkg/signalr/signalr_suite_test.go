@@ -1,4 +1,4 @@
-package signalr
+package signalr_test
 
 import (
 	"testing"
