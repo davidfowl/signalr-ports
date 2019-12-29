@@ -3,12 +3,19 @@
 <body>
     <input type="text" id="message" />
     <input type="button" value="Send" id="send" />
+    <input type="button" value="Panic" id="panic" />
+    <input type="button" value="RequestTuple" id="requesttuple" />
+    <input type="button" value="RequestAsync" id="requestasync" />
+    <input type="button" value="Stream" id="stream" />
+    <input type="button" value="Stop Stream" id="stopstream" />
+    <input type="button" value="Upstream" id="upstream" />
     <ul id="messages">
     </ul>
 
     <script src="js/signalr.js"></script>
     <script>
         (async function () {
+            var subscription;
             var connection = new signalR.HubConnectionBuilder()
                 .withUrl('/chat')
                 .build();
@@ -19,10 +26,81 @@
                     connection.invoke('send', val);
                 }
             });
+            document.getElementById('panic').addEventListener('click', () => {
+                connection.invoke('panic').catch((err) =>{
+                    var li = document.createElement('li');
+                    li.innerText = err;
+                    document.getElementById('messages').appendChild(li);
+                });
+            });
+
+            document.getElementById('requestasync').addEventListener('click', () => {
+                var val = document.getElementById('message').value;
+                if (val) {
+                    connection.invoke('requestasync', val).then(val => {
+                        var li = document.createElement('li');
+                        li.innerText = 'received finally ' + JSON.stringify(val);
+                        document.getElementById('messages').appendChild(li);
+                    })
+                }
+            });
+
+            document.getElementById('requesttuple').addEventListener('click', () => {
+                var val = document.getElementById('message').value;
+                if (val) {
+                    connection.invoke('requesttuple', val).then(val => {
+                        var li = document.createElement('li');
+                        li.innerText = 'received ' + JSON.stringify(val);
+                        document.getElementById('messages').appendChild(li);
+                    })
+                }
+            });
+            document.getElementById('stream').addEventListener('click', () => {
+                subscription = connection.stream('datestream').subscribe({
+                    next: (item) => {
+                        var li = document.createElement('li');
+                        li.innerText = 'item ' + item;
+                        document.getElementById('messages').appendChild(li);
+                    },
+                    complete: () => {
+                        var li = document.createElement('li');
+                        li.innerText = 'complete';
+                        document.getElementById('messages').appendChild(li);
+                    }
+                })
+            });
+            document.getElementById('stopstream').addEventListener('click', () => {
+                if (subscription) {
+                    subscription.dispose()
+                }
+            });
+            document.getElementById('upstream').addEventListener('click', () => {
+                const subject1 = new signalR.Subject();
+                const subject2 = new signalR.Subject();
+                connection.send("uploadstream", subject1, 3, subject2);
+                var iteration1 = 0;
+                const intervalHandle1 = setInterval(() => {
+                    iteration1++;
+                    subject1.next(iteration1);
+                    if (iteration1 === 5) {
+                        clearInterval(intervalHandle1);
+                        subject1.complete();
+                    }
+                }, 500);
+                var iteration2 = 0;
+                const intervalHandle2 = setInterval(() => {
+                    iteration2++;
+                    subject2.next(iteration2);
+                    if (iteration2 === 10) {
+                        clearInterval(intervalHandle2);
+                        subject2.complete();
+                    }
+                }, 100);
+            });
 
             connection.on('send', message => {
                 var li = document.createElement('li');
-                li.innerText = message;
+                li.innerText = 'sent ' + message;
                 document.getElementById('messages').appendChild(li);
             });
 
