@@ -1,12 +1,14 @@
 package main
 
 import (
-	"../pkg/signalr"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"../pkg/signalr"
 )
 
 type chat struct {
@@ -24,7 +26,7 @@ func (c *chat) OnDisconnected(connectionID string) {
 }
 
 func (c *chat) Send(message string) {
-	c.Clients().Group("group").Send("send", message)
+	c.Clients().Group("group").Send("Send", message)
 }
 
 func (c *chat) Panic() {
@@ -88,13 +90,48 @@ func (c *chat) UploadStream(upload1 <-chan int, factor float64, upload2 <-chan f
 	}
 }
 
-func main() {
+func runTCP(address string, hub signalr.HubInterface) {
+	listener, err := net.Listen("tcp", address)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("Listening for TCP connection on %s\n", listener.Addr())
+
+	server := signalr.NewServer(hub)
+
+	for {
+		conn, err := listener.Accept()
+
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+
+		go server.Run(newNetConnection(conn))
+	}
+}
+
+func runHTTP(address string, hub signalr.HubInterface) {
 	router := http.NewServeMux()
 	router.Handle("/", http.FileServer(http.Dir("../public")))
 
-	signalr.MapHub(router, "/chat", &chat{})
+	signalr.MapHub(router, "/chat", hub)
 
-	if err := http.ListenAndServe("localhost:8086", router); err != nil {
+	fmt.Printf("Listening for websocket connections on %s\n", address)
+
+	if err := http.ListenAndServe(address, router); err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
+}
+
+func main() {
+	hub := &chat{}
+
+	go runTCP("127.0.0.1:8007", hub)
+
+	// Block on the HTTP server
+	runHTTP("localhost:8086", hub)
 }

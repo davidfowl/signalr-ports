@@ -11,7 +11,7 @@ type webSocketConnection struct {
 	connectionID string
 }
 
-func (w *webSocketConnection) ConnectionId() string {
+func (w *webSocketConnection) ConnectionID() string {
 	return w.connectionID
 }
 

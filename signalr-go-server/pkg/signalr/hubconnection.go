@@ -2,7 +2,6 @@ package signalr
 
 import (
 	"bytes"
-	"io"
 	"sync/atomic"
 )
 
@@ -16,12 +15,6 @@ type hubConnection interface {
 	StreamItem(id string, item interface{})
 	Completion(id string, result interface{}, error string)
 	Ping()
-}
-
-type Connection interface {
-	io.Reader
-	io.Writer
-	ConnectionId() string
 }
 
 func newHubConnection(connection Connection, protocol HubProtocol) hubConnection {
@@ -57,7 +50,7 @@ func (c *defaultHubConnection) Close(error string) {
 }
 
 func (c *defaultHubConnection) GetConnectionID() string {
-	return c.Connection.ConnectionId()
+	return c.Connection.ConnectionID()
 }
 
 func (c *defaultHubConnection) SendInvocation(target string, args []interface{}) {

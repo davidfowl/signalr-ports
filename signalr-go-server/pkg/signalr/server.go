@@ -33,7 +33,7 @@ func NewServer(hub HubInterface) *Server {
 	}
 }
 
-func (s *Server) messageLoop(conn Connection) {
+func (s *Server) Run(conn Connection) {
 	if protocol, err := processHandshake(conn); err != nil {
 		fmt.Println(err)
 	} else {

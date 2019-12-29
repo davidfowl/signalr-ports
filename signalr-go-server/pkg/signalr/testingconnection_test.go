@@ -14,7 +14,7 @@ type testingConnection struct {
 	received  chan interface{}
 }
 
-func (t *testingConnection) ConnectionId() string {
+func (t *testingConnection) ConnectionID() string {
 	return "test"
 }
 
