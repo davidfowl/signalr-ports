@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// Server is a SignalR server for one type of hub
 type Server struct {
 	hub               HubInterface
 	lifetimeManager   HubLifetimeManager
@@ -18,6 +19,7 @@ type Server struct {
 	groupManager      GroupManager
 }
 
+// NewServer creates a new server for one type of hub
 func NewServer(hub HubInterface) *Server {
 	lifetimeManager := defaultHubLifetimeManager{}
 	return &Server{
@@ -33,6 +35,7 @@ func NewServer(hub HubInterface) *Server {
 	}
 }
 
+// Run runs the server on one connection. The same server might be run on different connections in parallel
 func (s *Server) Run(conn Connection) {
 	if protocol, err := processHandshake(conn); err != nil {
 		fmt.Println(err)
