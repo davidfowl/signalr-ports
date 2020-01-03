@@ -1,6 +1,8 @@
 package signalr
 
-//HubContext holds the clients and groups connected to the hub
+// HubContext is a context abstraction for a hub
+// Clients() gets a HubClients that can be used to invoke methods on clients connected to the hub
+// Groups() gets a GroupManager that can be used to add and remove connections to named groups
 type HubContext interface {
 	Clients() HubClients
 	Groups() GroupManager
