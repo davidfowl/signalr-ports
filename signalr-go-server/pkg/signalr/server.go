@@ -11,16 +11,16 @@ import (
 	"time"
 )
 
-type server struct {
+type Server struct {
 	hub               HubInterface
 	lifetimeManager   HubLifetimeManager
 	defaultHubClients HubClients
 	groupManager      GroupManager
 }
 
-func newServer(hub HubInterface) *server {
+func NewServer(hub HubInterface) *Server {
 	lifetimeManager := defaultHubLifetimeManager{}
-	return &server{
+	return &Server{
 		hub:             hub,
 		lifetimeManager: &lifetimeManager,
 		defaultHubClients: &defaultHubClients{
@@ -33,7 +33,7 @@ func newServer(hub HubInterface) *server {
 	}
 }
 
-func (s *server) messageLoop(conn Connection) {
+func (s *Server) Run(conn Connection) {
 	if protocol, err := processHandshake(conn); err != nil {
 		fmt.Println(err)
 	} else {
@@ -124,7 +124,7 @@ type hubInfo struct {
 	methods         map[string]reflect.Value
 }
 
-func (s *server) newHubInfo() *hubInfo {
+func (s *Server) newHubInfo() *hubInfo {
 
 	s.hub.Initialize(&defaultHubContext{
 		clients: s.defaultHubClients,
