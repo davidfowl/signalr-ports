@@ -8,7 +8,7 @@ import (
 	"io"
 )
 
-type jsonHubProtocol struct {
+type JsonHubProtocol struct {
 }
 
 // Protocol specific message for correct unmarshaling of Arguments
@@ -20,11 +20,11 @@ type jsonInvocationMessage struct {
 	StreamIds    []string          `json:"streamIds,omitempty"`
 }
 
-func (j *jsonHubProtocol) UnmarshalArgument(argument interface{}, value interface{}) error {
+func (j *JsonHubProtocol) UnmarshalArgument(argument interface{}, value interface{}) error {
 	return json.Unmarshal(argument.(json.RawMessage), value)
 }
 
-func (j *jsonHubProtocol) ReadMessage(buf *bytes.Buffer) (interface{}, bool, error) {
+func (j *JsonHubProtocol) ReadMessage(buf *bytes.Buffer) (interface{}, bool, error) {
 	data, err := parseTextMessageFormat(buf)
 	switch {
 	case errors.Is(err, io.EOF):
@@ -84,7 +84,7 @@ func parseTextMessageFormat(buf *bytes.Buffer) ([]byte, error) {
 	return data[0 : len(data)-1], err
 }
 
-func (j *jsonHubProtocol) WriteMessage(message interface{}, writer io.Writer) error {
+func (j *JsonHubProtocol) WriteMessage(message interface{}, writer io.Writer) error {
 
 	// TODO: Reduce the amount of copies
 
