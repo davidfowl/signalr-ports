@@ -3,6 +3,8 @@ package signalr
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/onsi/ginkgo"
 	"io"
 )
 
@@ -37,9 +39,11 @@ func newTestingConnection() *testingConnection {
 	}
 	// Send initial Handshake
 	go func() {
-		conn.clientSend(`{"protocol": "json","version": 1}`)
+		if _, err := conn.clientSend(`{"protocol": "json","version": 1}`); err != nil {
+			ginkgo.Fail(fmt.Sprint(err))
+		}
 	}()
-	conn.received = make(chan interface{}, 20)
+	conn.received = make(chan interface{}, 0)
 	go func() {
 		for {
 			if message, err := conn.clientReceive(); err == nil {
@@ -75,10 +79,10 @@ func (t *testingConnection) clientReceive() (string, error) {
 	for {
 		if message, err := buf.ReadString(30); err != nil {
 			buf.Write(data[:n])
-			if n, err = t.cliReader.Read(data); err != nil {
-				return "", err
-			} else {
+			if n, err = t.cliReader.Read(data); err == nil {
 				buf.Write(data[:n])
+			} else{
+				return "", err
 			}
 		} else {
 			return message[:len(message)-1], nil

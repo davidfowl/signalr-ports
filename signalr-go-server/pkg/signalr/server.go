@@ -11,19 +11,21 @@ import (
 	"time"
 )
 
+// Server is a SignalR server for one type of hub
 type Server struct {
 	hub               HubInterface
 	lifetimeManager   HubLifetimeManager
-	defaultHubClients defaultHubClients
+	defaultHubClients HubClients
 	groupManager      GroupManager
 }
 
+// NewServer creates a new server for one type of hub
 func NewServer(hub HubInterface) *Server {
 	lifetimeManager := defaultHubLifetimeManager{}
 	return &Server{
 		hub:             hub,
 		lifetimeManager: &lifetimeManager,
-		defaultHubClients: defaultHubClients{
+		defaultHubClients: &defaultHubClients{
 			lifetimeManager: &lifetimeManager,
 			allCache:        allClientProxy{lifetimeManager: &lifetimeManager},
 		},
@@ -33,6 +35,7 @@ func NewServer(hub HubInterface) *Server {
 	}
 }
 
+// Run runs the server on one connection. The same server might be run on different connections in parallel
 func (s *Server) Run(conn Connection) {
 	if protocol, err := processHandshake(conn); err != nil {
 		fmt.Println(err)
@@ -65,7 +68,7 @@ func (s *Server) Run(conn Connection) {
 						// argument build failed
 						hubConn.Completion(invocation.InvocationID, nil, err.Error())
 					} else if clientStreaming {
-						// let the receiving method run idependently
+						// let the receiving method run independently
 						go func() {
 							defer func() {
 								if err := recover(); err != nil {
@@ -127,7 +130,7 @@ type hubInfo struct {
 func (s *Server) newHubInfo() *hubInfo {
 
 	s.hub.Initialize(&defaultHubContext{
-		clients: &s.defaultHubClients,
+		clients: s.defaultHubClients,
 		groups:  s.groupManager,
 	})
 

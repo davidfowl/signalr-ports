@@ -2,6 +2,7 @@ package signalr
 
 import (
 	"bytes"
+	"fmt"
 	"sync/atomic"
 )
 
@@ -46,7 +47,9 @@ func (c *defaultHubConnection) Close(error string) {
 		Error:          error,
 		AllowReconnect: true,
 	}
-	c.Protocol.WriteMessage(closeMessage, c.Connection)
+	if err := c.Protocol.WriteMessage(closeMessage, c.Connection); err != nil {
+		fmt.Printf("cannot close connection %v: %v", c.GetConnectionID(), err)
+	}
 }
 
 func (c *defaultHubConnection) GetConnectionID() string {
@@ -60,7 +63,9 @@ func (c *defaultHubConnection) SendInvocation(target string, args []interface{})
 		Arguments: args,
 	}
 
-	c.Protocol.WriteMessage(invocationMessage, c.Connection)
+	if err := c.Protocol.WriteMessage(invocationMessage, c.Connection); err != nil {
+		fmt.Printf("cannot send invocation %v %v over connection %v: %v", target, args, c.GetConnectionID(), err)
+	}
 }
 
 func (c *defaultHubConnection) Ping() {
@@ -68,7 +73,9 @@ func (c *defaultHubConnection) Ping() {
 		Type: 6,
 	}
 
-	c.Protocol.WriteMessage(pingMessage, c.Connection)
+	if err := c.Protocol.WriteMessage(pingMessage, c.Connection); err != nil {
+		fmt.Printf("cannot ping over connection %v: %v", c.GetConnectionID(), err)
+	}
 }
 
 func (c *defaultHubConnection) Receive() (interface{}, error) {
@@ -80,10 +87,10 @@ func (c *defaultHubConnection) Receive() (interface{}, error) {
 			// Partial message, need more data
 			// ReadMessage read data out of the buf, so its gone there: refill
 			buf.Write(data[:n])
-			if n, err = c.Connection.Read(data); err != nil {
-				return nil, err
-			} else {
+			if n, err = c.Connection.Read(data); err == nil {
 				buf.Write(data[:n])
+			} else {
+				return nil, err
 			}
 		} else {
 			return message, err
@@ -99,7 +106,9 @@ func (c *defaultHubConnection) Completion(id string, result interface{}, error s
 		Error:        error,
 	}
 
-	c.Protocol.WriteMessage(completionMessage, c.Connection)
+	if err := c.Protocol.WriteMessage(completionMessage, c.Connection); err != nil {
+		fmt.Printf("cannot send completion for invocation %v over connection %v: %v", id, c.GetConnectionID(), err)
+	}
 }
 
 func (c *defaultHubConnection) StreamItem(id string, item interface{}) {
@@ -109,5 +118,7 @@ func (c *defaultHubConnection) StreamItem(id string, item interface{}) {
 		Item:         item,
 	}
 
-	c.Protocol.WriteMessage(streamItemMessage, c.Connection)
+	if err := c.Protocol.WriteMessage(streamItemMessage, c.Connection); err != nil {
+		fmt.Printf("cannot send stream item for invocation %v over connection %v: %v", id, c.GetConnectionID(), err)
+	}
 }

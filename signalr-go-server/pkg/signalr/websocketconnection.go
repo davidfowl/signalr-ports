@@ -24,11 +24,9 @@ func (w *webSocketConnection) Read(p []byte) (n int, err error) {
 		var data []byte
 		if err = websocket.Message.Receive(w.ws, &data); err != nil {
 			return 0, err
-		} else {
-			w.r = bytes.NewReader(data)
-			return w.r.Read(p)
 		}
-	} else {
+		w.r = bytes.NewReader(data)
 		return w.r.Read(p)
 	}
+	return w.r.Read(p)
 }
