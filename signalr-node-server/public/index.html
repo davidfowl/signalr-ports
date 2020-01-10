@@ -1,7 +1,7 @@
 <html>
 
 <body>
-    Server Time: <span id="date"></span><br />
+    <div>Server Time: <span id="date"></span></div>
     <form>
         <input type="text" id="user" placeholder="user" required /><br />
         <input type="text" id="message" placeholder="message" required /><br />
@@ -25,11 +25,12 @@
                 document.getElementById('date').innerText = new Date(date);
             });
 
-            document.getElementById('send').addEventListener('click', () => {
+            document.getElementById('send').addEventListener('click', event => {
+                event.preventDefault();
                 var user = document.getElementById('user').value;
                 var message = document.getElementById('message').value;
                 if (user && message) {
-                    connection.invoke('SendMessage', user, message);
+                    connection.invoke('sendmessage', user, message);
                 }
             });
 
