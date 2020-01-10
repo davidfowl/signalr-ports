@@ -20,7 +20,7 @@ chat.on('disconnect', id => {
 });
 
 chat.on('sendmessage', (user, message) => {
-    chat.clients.all.send('ReceiveMessage', user, message);
+    chat.clients.all.send('receivemessage', user, message);
 });
 
 app.use(express.static('public'));

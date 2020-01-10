@@ -34,7 +34,7 @@
                 }
             });
 
-            connection.on('ReceiveMessage', (user, message) => {
+            connection.on('receivemessage', (user, message) => {
                 var msg = message
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
