@@ -19,7 +19,7 @@ chat.on('disconnect', id => {
     console.log(`${id} disconnected`);
 });
 
-chat.on('SendMessage', (user, message) => {
+chat.on('sendmessage', (user, message) => {
     chat.clients.all.send('ReceiveMessage', user, message);
 });
 
