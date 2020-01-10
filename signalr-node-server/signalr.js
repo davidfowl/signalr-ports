@@ -390,7 +390,7 @@ class Hub {
         switch (message.type) {
             case signalr.MessageType.Invocation:
                 try {
-                    var method = this._methods[message.target];
+                    var method = this._methods[message.target.toLowerCase()];
                     var result = await method.apply(this, message.arguments);
                     connection.completion(message.invocationId, result);
                 } catch (e) {
