@@ -73,8 +73,12 @@ class HttpTransport {
                     })
                 );
             } else if (this._matches(req, 'GET', parsedUrl, path)) {
-                if (req.headers['connection'] != 'Upgrade') {
-                    res.sendStatus(400);
+                if (
+                    req.headers['connection'] != 'Upgrade' &&
+                    typeof res !== 'undefined' &&
+                    typeof res.status === 'function'
+                ) {
+                    res.status(400).end();
                     return;
                 }
 
