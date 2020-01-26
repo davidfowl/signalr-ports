@@ -57,7 +57,7 @@ func (c *defaultHubConnection) GetConnectionID() string {
 }
 
 func (c *defaultHubConnection) SendInvocation(target string, args []interface{}) {
-	var invocationMessage = sendOnlyHubInvocationMessage{
+	var invocationMessage = invocationMessage{
 		Type:      1,
 		Target:    target,
 		Arguments: args,
