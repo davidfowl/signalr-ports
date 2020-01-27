@@ -40,5 +40,5 @@ func (h *Hub) Items() *sync.Map {
 // OnConnected is called when the hub is connected
 func (h *Hub) OnConnected(string) {}
 
-//OnDisconnected is called when the hub is disconnected
+// OnDisconnected is called when the hub is disconnected
 func (h *Hub) OnDisconnected(string) {}
