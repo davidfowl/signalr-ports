@@ -1,14 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"../pkg/signalr"
 	"log"
 	"net"
 	"net/http"
 	"strings"
 	"time"
-
-	"../pkg/signalr"
 )
 
 type chat struct {
@@ -27,6 +27,10 @@ func (c *chat) OnDisconnected(connectionID string) {
 
 func (c *chat) Send(message string) {
 	c.Clients().Group("group").Send("Send", message)
+}
+
+func (c *chat) Echo(message string) {
+	c.Clients().Caller().Send("send", message)
 }
 
 func (c *chat) Panic() {
@@ -68,24 +72,23 @@ func (c *chat) UploadStream(upload1 <-chan int, factor float64, upload2 <-chan f
 	ok2 := true
 	u1 := 0
 	u2 := 0.0
-	c.Send(fmt.Sprintf("f: %v", factor))
+	c.Echo(fmt.Sprintf("f: %v", factor))
 	for {
 		select {
 		case u1, ok1 = <-upload1:
 			if ok1 {
-				c.Send(fmt.Sprintf("u1: %v", u1))
+				c.Echo(fmt.Sprintf("u1: %v", u1))
 			} else if !ok2 {
-				c.Send("Finished")
+				c.Echo("Finished")
 				return
 			}
 		case u2, ok2 = <-upload2:
 			if ok2 {
-				c.Send(fmt.Sprintf("u2: %v", u2))
+				c.Echo(fmt.Sprintf("u2: %v", u2))
 			} else if !ok1 {
-				c.Send("Finished")
+				c.Echo("Finished")
 				return
 			}
-		default:
 		}
 	}
 }
@@ -100,7 +103,7 @@ func runTCP(address string, hub signalr.HubInterface) {
 
 	fmt.Printf("Listening for TCP connection on %s\n", listener.Addr())
 
-	server := signalr.NewServer(hub)
+	server, _ := signalr.NewServer(signalr.UseHub(hub))
 
 	for {
 		conn, err := listener.Accept()
@@ -110,7 +113,7 @@ func runTCP(address string, hub signalr.HubInterface) {
 			break
 		}
 
-		go server.Run(newNetConnection(conn))
+		go server.Run(newNetConnection(conn), context.TODO())
 	}
 }
 

@@ -1,6 +1,7 @@
 package signalr
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -10,46 +11,50 @@ import (
 )
 
 // MapHub used to register a SignalR Hub with the specified ServeMux
-func MapHub(mux *http.ServeMux, path string, hub HubInterface) {
-	mux.HandleFunc(fmt.Sprintf("%s/negotiate", path), negotiateHandler)
-	server := NewServer(hub)
+func MapHub(mux *http.ServeMux, path string, hubProto HubInterface) *Server {
+	mux.HandleFunc(fmt.Sprintf("%s/negotiateWebSocketTestServer", path), negotiateHandler)
+	server, _ := NewServer(SimpleHubFactory(hubProto))
 	mux.Handle(path, websocket.Handler(func(ws *websocket.Conn) {
 		connectionID := ws.Request().URL.Query().Get("id")
 		if len(connectionID) == 0 {
-			// Support websocket connection without negotiate
+			// Support websocket connection without negotiateWebSocketTestServer
 			connectionID = getConnectionID()
 		}
-		server.Run(&webSocketConnection{ws, nil, connectionID})
+		server.Run(context.TODO(), &webSocketConnection{ws, connectionID, 0})
 	}))
+	return server
 }
 
 func negotiateHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method != "POST" {
 		w.WriteHeader(400)
-		return
-	}
-
-	connectionID := getConnectionID()
-
-	response := negotiateResponse{
-		ConnectionID: connectionID,
-		AvailableTransports: []availableTransport{
-			{
-				Transport:       "WebSockets",
-				TransferFormats: []string{"Text", "Binary"},
+	} else {
+		response := negotiateResponse{
+			ConnectionID: getConnectionID(),
+			AvailableTransports: []availableTransport{
+				{
+					Transport:       "WebSockets",
+					TransferFormats: []string{"Text", "Binary"},
+				},
 			},
-		},
-	}
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		fmt.Println(err)
+		}
+		_ = json.NewEncoder(w).Encode(response) // Can't imagine an error when encoding
 	}
 }
 
 func getConnectionID() string {
 	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		fmt.Println(err)
-	}
+	// rand.Read only fails when the systems random number generator fails. Rare case, ignore
+	_, _ = rand.Read(bytes)
 	return base64.StdEncoding.EncodeToString(bytes)
+}
+
+type availableTransport struct {
+	Transport       string   `json:"transport"`
+	TransferFormats []string `json:"transferFormats"`
+}
+
+type negotiateResponse struct {
+	ConnectionID        string               `json:"connectionId"`
+	AvailableTransports []availableTransport `json:"availableTransports"`
 }

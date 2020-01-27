@@ -6,10 +6,15 @@ import (
 )
 
 // HubProtocol interface
+// ReadMessage() reads a message from buf and returns the message if the buf contained one completely.
+// If buf does not contain the whole message, it returns a nil message and complete false
+// WriteMessage writes a message to the specified writer
+// UnmarshalArgument() unmarshals a raw message depending of the specified value type into value
 type HubProtocol interface {
 	ReadMessage(buf *bytes.Buffer) (interface{}, bool, error)
 	WriteMessage(message interface{}, writer io.Writer) error
 	UnmarshalArgument(argument interface{}, value interface{}) error
+	setDebugLogger(dbg StructuredLogger)
 }
 
 // Protocol
@@ -18,11 +23,17 @@ type hubMessage struct {
 }
 
 type invocationMessage struct {
-	Type         int           `json:"type"`
-	Target       string        `json:"target"`
-	InvocationID string        `json:"invocationId,omitempty"`
-	Arguments    []interface{} `json:"arguments"`
-	StreamIds    []string      `json:"streamIds,omitempty"`
+	Type         int
+	Target       string
+	InvocationID string
+	Arguments    []interface{}
+	StreamIds    []string
+}
+
+type sendOnlyHubInvocationMessage struct {
+	Type      int           `json:"type"`
+	Target    string        `json:"target"`
+	Arguments []interface{} `json:"arguments"`
 }
 
 type completionMessage struct {

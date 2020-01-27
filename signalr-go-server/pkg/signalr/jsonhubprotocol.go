@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-kit/kit/log"
 	"io"
 )
 
-type JsonHubProtocol struct {
+// JSONHubProtocol is the JSON based SignalR protocol
+type JSONHubProtocol struct {
+	dbg log.Logger
 }
 
 // Protocol specific message for correct unmarshaling of Arguments
@@ -20,30 +23,47 @@ type jsonInvocationMessage struct {
 	StreamIds    []string          `json:"streamIds,omitempty"`
 }
 
-func (j *JsonHubProtocol) UnmarshalArgument(argument interface{}, value interface{}) error {
-	return json.Unmarshal(argument.(json.RawMessage), value)
+type jsonError struct {
+	raw string
+	err error
 }
 
-func (j *JsonHubProtocol) ReadMessage(buf *bytes.Buffer) (interface{}, bool, error) {
+func (j *jsonError) Error() string {
+	return fmt.Sprintf("%v (source: %v)", j.err, j.raw)
+}
+
+// UnmarshalArgument unmarshals a json.RawMessage depending of the specified value type into value
+func (j *JSONHubProtocol) UnmarshalArgument(argument interface{}, value interface{}) error {
+	if err := json.Unmarshal(argument.(json.RawMessage), value); err != nil {
+		return &jsonError{string(argument.(json.RawMessage)), err}
+	}
+	return nil
+}
+
+// ReadMessage reads a JSON message from buf and returns the message if the buf contained one completely.
+// If buf does not contain the whole message, it returns a nil message and complete false
+func (j *JSONHubProtocol) ReadMessage(buf *bytes.Buffer) (m interface{}, complete bool, err error) {
 	data, err := parseTextMessageFormat(buf)
 	switch {
 	case errors.Is(err, io.EOF):
 		return nil, false, err
-	case err != nil:
-		return nil, true, err
+		// Other errors never happen, because parseTextMessageFormat will only return err
+		// from bytes.Buffer.ReadBytes() which is always io.EOF or nil
 	}
 
 	message := hubMessage{}
 	err = json.Unmarshal(data, &message)
-
+	_ = j.dbg.Log(evt, "read", msg, string(data))
 	if err != nil {
-		return nil, true, err
+		return nil, true, &jsonError{string(data), err}
 	}
 
 	switch message.Type {
 	case 1, 4:
 		jsonInvocation := jsonInvocationMessage{}
-		err = json.Unmarshal(data, &jsonInvocation)
+		if err = json.Unmarshal(data, &jsonInvocation); err != nil {
+			err = &jsonError{string(data), err}
+		}
 		arguments := make([]interface{}, len(jsonInvocation.Arguments))
 		for i, a := range jsonInvocation.Arguments {
 			arguments[i] = a
@@ -58,16 +78,28 @@ func (j *JsonHubProtocol) ReadMessage(buf *bytes.Buffer) (interface{}, bool, err
 		return invocation, true, err
 	case 2:
 		streamItem := streamItemMessage{}
-		err = json.Unmarshal(data, &streamItem)
+		if err = json.Unmarshal(data, &streamItem); err != nil {
+			err = &jsonError{string(data), err}
+		}
 		return streamItem, true, err
 	case 3:
 		completion := completionMessage{}
-		err := json.Unmarshal(data, &completion)
+		if err = json.Unmarshal(data, &completion); err != nil {
+			err = &jsonError{string(data), err}
+		}
 		return completion, true, err
 	case 5:
 		invocation := cancelInvocationMessage{}
-		err = json.Unmarshal(data, &invocation)
+		if err = json.Unmarshal(data, &invocation); err != nil {
+			err = &jsonError{string(data), err}
+		}
 		return invocation, true, err
+	case 7:
+		cm := closeMessage{}
+		if err = json.Unmarshal(data, &cm); err != nil {
+			err = &jsonError{string(data), err}
+		}
+		return cm, true, err
 	default:
 		return message, true, nil
 	}
@@ -80,26 +112,23 @@ func parseTextMessageFormat(buf *bytes.Buffer) ([]byte, error) {
 	if err != nil {
 		return data, err
 	}
-	// Remove the delimeter
+	// Remove the delimiter
 	return data[0 : len(data)-1], err
 }
 
-func (j *JsonHubProtocol) WriteMessage(message interface{}, writer io.Writer) error {
-
-	// TODO: Reduce the amount of copies
-
-	// We're copying because we want to write complete messages to the underlying Writer
+// WriteMessage writes a message as JSON to the specified writer
+func (j *JSONHubProtocol) WriteMessage(message interface{}, writer io.Writer) error {
 	buf := bytes.Buffer{}
-
 	if err := json.NewEncoder(&buf).Encode(message); err != nil {
+		// Don't know when this will happen, presumably never
 		return err
 	}
-	fmt.Printf("Message sent %v", string(buf.Bytes()))
-
-	if err := buf.WriteByte(30); err != nil {
-		return err
-	}
-
+	_ = j.dbg.Log(evt, "write", msg, buf.String())
+	_ = buf.WriteByte(30) // bytes.Buffer.WriteByte() returns always nil
 	_, err := writer.Write(buf.Bytes())
 	return err
+}
+
+func (j *JSONHubProtocol) setDebugLogger(dbg StructuredLogger) {
+	j.dbg = log.WithPrefix(dbg, "ts", log.DefaultTimestampUTC, "protocol", "JSON")
 }
