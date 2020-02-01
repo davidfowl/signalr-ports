@@ -11,7 +11,7 @@ import (
 
 // JSONHubProtocol is the JSON based SignalR protocol
 type JSONHubProtocol struct {
-	dbg log.Logger
+	dbg StructuredLogger
 }
 
 // Protocol specific message for correct unmarshaling of Arguments
