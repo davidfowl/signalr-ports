@@ -1,6 +1,9 @@
 package signalr
 
-import "sync"
+import (
+	"github.com/go-kit/kit/log"
+	"sync"
+)
 
 // HubLifetimeManager is a lifetime manager abstraction for hub instances
 // OnConnected() is called when a connection is started
@@ -20,68 +23,63 @@ type HubLifetimeManager interface {
 	RemoveFromGroup(groupName, connectionID string)
 }
 
+func newLifeTimeManager(info StructuredLogger) defaultHubLifetimeManager {
+	return defaultHubLifetimeManager{
+		info: log.WithPrefix(info, "ts", log.DefaultTimestampUTC,
+			"class", "lifeTimeManager"),
+	}
+}
+
 type defaultHubLifetimeManager struct {
 	clients sync.Map
 	groups  sync.Map
+	info    StructuredLogger
 }
 
 func (d *defaultHubLifetimeManager) OnConnected(conn hubConnection) {
-	d.clients.Store(conn.GetConnectionID(), conn)
+	d.clients.Store(conn.ConnectionID(), conn)
 }
 
 func (d *defaultHubLifetimeManager) OnDisconnected(conn hubConnection) {
-	d.clients.Delete(conn.GetConnectionID())
+	d.clients.Delete(conn.ConnectionID())
 }
 
 func (d *defaultHubLifetimeManager) InvokeAll(target string, args []interface{}) {
 	d.clients.Range(func(key, value interface{}) bool {
-		value.(hubConnection).SendInvocation(target, args)
+		sendMessageAndLog(func() (i interface{}, err error) {
+			return value.(hubConnection).SendInvocation(target, args)
+		}, d.info)
 		return true
 	})
 }
 
 func (d *defaultHubLifetimeManager) InvokeClient(connectionID string, target string, args []interface{}) {
-	client, ok := d.clients.Load(connectionID)
-
-	if !ok {
-		return
+	if client, ok := d.clients.Load(connectionID); ok {
+		sendMessageAndLog(func() (i interface{}, err error) {
+			return client.(hubConnection).SendInvocation(target, args)
+		}, d.info)
 	}
-
-	client.(hubConnection).SendInvocation(target, args)
 }
 
 func (d *defaultHubLifetimeManager) InvokeGroup(groupName string, target string, args []interface{}) {
-	groups, ok := d.groups.Load(groupName)
-
-	if !ok {
-		// No such group
-		return
-	}
-
-	for _, v := range groups.(map[string]hubConnection) {
-		v.SendInvocation(target, args)
+	if groups, ok := d.groups.Load(groupName); ok {
+		for _, v := range groups.(map[string]hubConnection) {
+			sendMessageAndLog(func() (i interface{}, err error) {
+				return v.SendInvocation(target, args)
+			}, d.info)
+		}
 	}
 }
 
 func (d *defaultHubLifetimeManager) AddToGroup(groupName string, connectionID string) {
-	client, ok := d.clients.Load(connectionID)
-
-	if !ok {
-		// No such client
-		return
+	if client, ok := d.clients.Load(connectionID); ok {
+		groups, _ := d.groups.LoadOrStore(groupName, make(map[string]hubConnection))
+		groups.(map[string]hubConnection)[connectionID] = client.(hubConnection)
 	}
-
-	groups, _ := d.groups.LoadOrStore(groupName, make(map[string]hubConnection))
-
-	groups.(map[string]hubConnection)[connectionID] = client.(hubConnection)
 }
 
 func (d *defaultHubLifetimeManager) RemoveFromGroup(groupName string, connectionID string) {
-	groups, ok := d.groups.Load(groupName)
-
-	if !ok {
-		return
+	if groups, ok := d.groups.Load(groupName); ok {
+		delete(groups.(map[string]hubConnection), connectionID)
 	}
-
-	delete(groups.(map[string]hubConnection), connectionID)
 }

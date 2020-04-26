@@ -2,123 +2,198 @@ package signalr
 
 import (
 	"bytes"
-	"fmt"
-	"sync/atomic"
+	"context"
+	"errors"
+	"sync"
 )
 
 type hubConnection interface {
 	Start()
 	IsConnected() bool
-	Close(error string)
-	GetConnectionID() string
+	ConnectionID() string
 	Receive() (interface{}, error)
-	SendInvocation(target string, args []interface{})
-	StreamItem(id string, item interface{})
-	Completion(id string, result interface{}, error string)
-	Ping()
+	SendInvocation(target string, args ...interface{}) (invocationMessage, error)
+	StreamItem(id string, item interface{}) (streamItemMessage, error)
+	Completion(id string, result interface{}, error string) (completionMessage, error)
+	Close(error string, allowReconnect bool) (closeMessage, error)
+	Ping() (hubMessage, error)
+	Items() *sync.Map
+	Abort()
+	Aborted() <-chan error
 }
 
-func newHubConnection(connection Connection, protocol HubProtocol) hubConnection {
+func newHubConnection(parentContext context.Context, connection Connection, protocol HubProtocol, maximumReceiveMessageSize uint) hubConnection {
 	return &defaultHubConnection{
-		Protocol:   protocol,
-		Connection: connection,
+		protocol:                  protocol,
+		connection:                connection,
+		maximumReceiveMessageSize: maximumReceiveMessageSize,
+		items:                     &sync.Map{},
+		context:                   parentContext,
+		aborted:                   make(chan error, 1),
 	}
 }
 
 type defaultHubConnection struct {
-	Protocol   HubProtocol
-	Connected  int32
-	Connection Connection
+	protocol                  HubProtocol
+	mx                        sync.Mutex
+	connected                 bool
+	aborted                   chan error
+	connection                Connection
+	maximumReceiveMessageSize uint
+	items                     *sync.Map
+	context                   context.Context
+}
+
+func (c *defaultHubConnection) Items() *sync.Map {
+	return c.items
 }
 
 func (c *defaultHubConnection) Start() {
-	atomic.CompareAndSwapInt32(&c.Connected, 0, 1)
+	defer c.mx.Unlock()
+	c.mx.Lock()
+	c.connected = true
 }
 
 func (c *defaultHubConnection) IsConnected() bool {
-	return atomic.LoadInt32(&c.Connected) == 1
+	defer c.mx.Unlock()
+	c.mx.Lock()
+	return c.connected
 }
 
-func (c *defaultHubConnection) Close(error string) {
-	atomic.StoreInt32(&c.Connected, 0)
-
+func (c *defaultHubConnection) Close(error string, allowReconnect bool) (closeMessage, error) {
 	var closeMessage = closeMessage{
 		Type:           7,
 		Error:          error,
-		AllowReconnect: true,
+		AllowReconnect: allowReconnect,
 	}
-	if err := c.Protocol.WriteMessage(closeMessage, c.Connection); err != nil {
-		fmt.Printf("cannot close connection %v: %v", c.GetConnectionID(), err)
+	return closeMessage, c.writeMessage(closeMessage)
+}
+
+func (c *defaultHubConnection) ConnectionID() string {
+	return c.connection.ConnectionID()
+}
+
+func (c *defaultHubConnection) Abort() {
+	defer c.mx.Unlock()
+	c.mx.Lock()
+	if c.connected {
+		c.aborted <- errors.New("connection aborted from hub")
+		c.connected = false
 	}
 }
 
-func (c *defaultHubConnection) GetConnectionID() string {
-	return c.Connection.ConnectionID()
+func (c *defaultHubConnection) Aborted() <-chan error {
+	return c.aborted
 }
 
-func (c *defaultHubConnection) SendInvocation(target string, args []interface{}) {
+func (c *defaultHubConnection) Receive() (interface{}, error) {
+	if !c.IsConnected() {
+		return nil, c.context.Err()
+	}
+	m := make(chan interface{}, 1)
+	e := make(chan error, 1)
+	go func() {
+		var buf bytes.Buffer
+		var data = make([]byte, c.maximumReceiveMessageSize)
+		var n int
+		for {
+			if message, complete, err := c.protocol.ReadMessage(&buf); !complete {
+				// Partial message, need more data
+				// ReadMessage read data out of the buf, so its gone there: refill
+				buf.Write(data[:n])
+				nc := make(chan int)
+				e2 := make(chan error)
+				go func() {
+					if n, err = c.connection.Read(data); err == nil {
+						buf.Write(data[:n])
+						nc <- n
+					} else {
+						e2 <- err
+					}
+				}()
+				select {
+				case n = <-nc:
+				case err = <-e2:
+					c.Abort()
+					e <- err
+					m <- nil
+					return
+				case <-c.context.Done():
+					e <- c.context.Err()
+					m <- nil
+					return
+				}
+			} else {
+				m <- message
+				e <- err
+				return
+			}
+		}
+	}()
+	select {
+	case <-c.context.Done():
+		return nil, c.context.Err()
+	case err := <-e:
+		return <-m, err
+	case message := <-m:
+		return message, <-e
+	}
+}
+
+func (c *defaultHubConnection) SendInvocation(target string, args ...interface{}) (invocationMessage, error) {
 	var invocationMessage = invocationMessage{
 		Type:      1,
 		Target:    target,
 		Arguments: args,
 	}
-
-	if err := c.Protocol.WriteMessage(invocationMessage, c.Connection); err != nil {
-		fmt.Printf("cannot send invocation %v %v over connection %v: %v", target, args, c.GetConnectionID(), err)
-	}
+	return invocationMessage, c.writeMessage(invocationMessage)
 }
 
-func (c *defaultHubConnection) Ping() {
-	var pingMessage = hubMessage{
-		Type: 6,
+func (c *defaultHubConnection) StreamItem(id string, item interface{}) (streamItemMessage, error) {
+	var streamItemMessage = streamItemMessage{
+		Type:         2,
+		InvocationID: id,
+		Item:         item,
 	}
-
-	if err := c.Protocol.WriteMessage(pingMessage, c.Connection); err != nil {
-		fmt.Printf("cannot ping over connection %v: %v", c.GetConnectionID(), err)
-	}
+	return streamItemMessage, c.writeMessage(streamItemMessage)
 }
 
-func (c *defaultHubConnection) Receive() (interface{}, error) {
-	var buf bytes.Buffer
-	var data = make([]byte, 1<<12) // 4K
-	var n int
-	for {
-		if message, complete, err := c.Protocol.ReadMessage(&buf); !complete {
-			// Partial message, need more data
-			// ReadMessage read data out of the buf, so its gone there: refill
-			buf.Write(data[:n])
-			if n, err = c.Connection.Read(data); err == nil {
-				buf.Write(data[:n])
-			} else {
-				return nil, err
-			}
-		} else {
-			return message, err
-		}
-	}
-}
-
-func (c *defaultHubConnection) Completion(id string, result interface{}, error string) {
+func (c *defaultHubConnection) Completion(id string, result interface{}, error string) (completionMessage, error) {
 	var completionMessage = completionMessage{
 		Type:         3,
 		InvocationID: id,
 		Result:       result,
 		Error:        error,
 	}
-
-	if err := c.Protocol.WriteMessage(completionMessage, c.Connection); err != nil {
-		fmt.Printf("cannot send completion for invocation %v over connection %v: %v", id, c.GetConnectionID(), err)
-	}
+	return completionMessage, c.writeMessage(completionMessage)
 }
 
-func (c *defaultHubConnection) StreamItem(id string, item interface{}) {
-	var streamItemMessage = streamItemMessage{
-		Type:         2,
-		InvocationID: id,
-		Item:         item,
+func (c *defaultHubConnection) Ping() (hubMessage, error) {
+	var pingMessage = hubMessage{
+		Type: 6,
 	}
+	return pingMessage, c.writeMessage(pingMessage)
+}
 
-	if err := c.Protocol.WriteMessage(streamItemMessage, c.Connection); err != nil {
-		fmt.Printf("cannot send stream item for invocation %v over connection %v: %v", id, c.GetConnectionID(), err)
+func (c *defaultHubConnection) writeMessage(message interface{}) error {
+	_, isCloseMsg := message.(closeMessage)
+	if !c.IsConnected() &&
+		// Allow sending closeMessage when Aborted
+		(c.Aborted() == nil || !isCloseMsg) {
+		return c.context.Err()
+	}
+	e := make(chan error, 1)
+	go func() { e <- c.protocol.WriteMessage(message, c.connection) }()
+	select {
+	case <-c.context.Done():
+		// Wait for WriteMessage to return
+		<-e
+		c.Abort()
+		return c.context.Err()
+	case err := <-e:
+		if err != nil {
+			c.Abort()
+		}
+		return err
 	}
 }
