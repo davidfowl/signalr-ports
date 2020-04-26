@@ -1,31 +1,31 @@
 const signalr = require('@microsoft/signalr');
-const signalrHttp = require("./signalr-http");
+const signalrHttp = require('./signalr-http');
 
 // TODO: Make configurable
 const handshakeTimeoutMs = 5000;
 const pingIntervalMs = 5000;
 const protocols = {
-    json: new signalr.JsonHubProtocol()
+    json: new signalr.JsonHubProtocol(),
 };
 
 // TODO: SignalR should expose HandshakeProtocol
 const TextMessageFormat = {
     RecordSeparator: String.fromCharCode(0x1e),
 
-    write: function (output) {
+    write: function(output) {
         return `${output}${TextMessageFormat.RecordSeparator}`;
     },
 
-    parse: function (input) {
+    parse: function(input) {
         if (input[input.length - 1] !== TextMessageFormat.RecordSeparator) {
-            throw new Error("Message is incomplete.");
+            throw new Error('Message is incomplete.');
         }
 
         const messages = input.split(TextMessageFormat.RecordSeparator);
         messages.pop();
         return messages;
-    }
-}
+    },
+};
 
 class HubConnection {
     constructor(connection) {
@@ -39,12 +39,12 @@ class HubConnection {
         this._closeHandler = null;
 
         this._handshakeTimeout = setTimeout(() => {
-            if (!this._handshake) {
+            if (!this._handshake && this.connection) {
                 this.connection.close();
             }
         }, handshakeTimeoutMs);
 
-        this._connection.onmessage((message) => this._onMessage(message));
+        this._connection.onmessage(message => this._onMessage(message));
         this._connection.onclose(() => {
             this._stop();
             if (this._closeHandler) {
@@ -133,9 +133,10 @@ class HubConnection {
 
             if (!protocol) {
                 // Fail for anything but JSON right now
-                this._doHandshakeResponse(`Requested protocol '${handshakeMessage.protocol}' is not available.`);
-            }
-            else {
+                this._doHandshakeResponse(
+                    `Requested protocol '${handshakeMessage.protocol}' is not available.`
+                );
+            } else {
                 this._setProtocol(protocol);
 
                 // All good!
@@ -148,8 +149,7 @@ class HubConnection {
                     this._handshakeCompleteHandler.apply(this);
                 }
             }
-        }
-        else {
+        } else {
             var messages = this._parseMessages(message);
 
             for (const message of messages) {
@@ -208,7 +208,7 @@ class HubLifetimeManager {
     onConnect(connection) {
         this._clients[connection.id] = {
             connection: connection,
-            groups: []
+            groups: [],
         };
     }
 
@@ -273,10 +273,12 @@ class HubLifetimeManager {
         var client = this._clients[connection.id];
         delete this._clients[connection.id];
 
-        // Clean up groups
-        for (const group of client.groups) {
-            // REVIEW: Performance..
-            this.removeFromGroup(connection.id, group);
+        if (client) {
+            // Clean up groups
+            for (const group of client.groups) {
+                // REVIEW: Performance..
+                this.removeFromGroup(connection.id, group);
+            }
         }
     }
 }
@@ -320,7 +322,7 @@ class HubClients {
     }
 
     get all() {
-        return this._all
+        return this._all;
     }
 
     client(id) {
@@ -353,9 +355,8 @@ class HubContext {
 }
 
 class Hub {
-    _methods = new Map();
-
     constructor() {
+        this._methods = new Map();
         this._connectCallback = null;
         this._disconnectCallback = null;
         this.clients = null;
@@ -365,11 +366,9 @@ class Hub {
     on(method, handler) {
         if (method === 'connect') {
             this._connectCallback = handler;
-        }
-        else if (method === 'disconnect') {
+        } else if (method === 'disconnect') {
             this._disconnectCallback = handler;
-        }
-        else {
+        } else {
             this._methods[method] = handler;
         }
     }
@@ -394,9 +393,12 @@ class Hub {
                     var method = this._methods[message.target.toLowerCase()];
                     var result = await method.apply(this, message.arguments);
                     connection.completion(message.invocationId, result);
-                }
-                catch (e) {
-                    connection.completion(message.invocationId, null, 'There was an error invoking the hub');
+                } catch (e) {
+                    connection.completion(
+                        message.invocationId,
+                        null,
+                        'There was an error invoking the hub'
+                    );
                 }
                 break;
             case signalr.MessageType.StreamItem:
@@ -417,7 +419,7 @@ var defaultLifetimeManager = new HubLifetimeManager();
 module.exports = function name(httpServer) {
     return {
         // Any transport
-        hub: (options) => {
+        hub: options => {
             options = options || {};
             hub = new Hub();
             // Resolve the lifetime manager
@@ -451,6 +453,6 @@ module.exports = function name(httpServer) {
                 transport.start(connectionHandler);
             }
             return hub;
-        }
+        },
     };
 };

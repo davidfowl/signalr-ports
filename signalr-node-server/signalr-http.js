@@ -1,7 +1,6 @@
 const ws = require('ws');
 const crypto = require('crypto');
 const url = require('url');
-
 const wss = new ws.Server({ noServer: true });
 
 // This should be an interface
@@ -42,7 +41,10 @@ class HttpTransport {
     }
 
     _matches(req, method, parsedUrl, path) {
-        return req.method == method && path === this._normalize(parsedUrl.pathname.substr(0, path.length));
+        return (
+            req.method == method &&
+            path === this._normalize(parsedUrl.pathname.substr(0, path.length))
+        );
     }
 
     start(connectionHandler) {
@@ -59,31 +61,34 @@ class HttpTransport {
                 var bytes = crypto.randomBytes(16);
                 var connectionId = bytes.toString('base64');
 
-                res.end(JSON.stringify({
-                    connectionId: connectionId,
-                    availableTransports: [
-                        {
-                            transport: "WebSockets",
-                            transferFormats: ["Text", "Binary"]
-                        }
-                    ]
-                }));
-            }
-            
-            else if (this._matches(req, 'GET', parsedUrl, path)) {
-                if (req.headers["connection"] != "Upgrade") {
-                    res.sendStatus(400);
+                res.end(
+                    JSON.stringify({
+                        connectionId: connectionId,
+                        availableTransports: [
+                            {
+                                transport: 'WebSockets',
+                                transferFormats: ['Text', 'Binary'],
+                            },
+                        ],
+                    })
+                );
+            } else if (this._matches(req, 'GET', parsedUrl, path)) {
+                if (
+                    req.headers['connection'] != 'Upgrade' &&
+                    typeof res !== 'undefined' &&
+                    typeof res.status === 'function'
+                ) {
+                    res.status(400).end();
                     return;
                 }
 
                 var id = parsedUrl.query.id;
 
                 // Check for upgrade
-                wss.handleUpgrade(req, req.socket, Buffer.alloc(0), (ws) => {
+                wss.handleUpgrade(req, req.socket, Buffer.alloc(0), ws => {
                     connectionHandler.onConnect(new WebSocketConnection(id, ws));
                 });
-            }
-            else {
+            } else {
                 for (var i = 0, l = listeners.length; i < l; i++) {
                     listeners[i].call(this._httpServer, req, res);
                 }

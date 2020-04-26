@@ -1,9 +1,12 @@
 <html>
 
 <body>
-    Server Time: <span id="date"></span><br />
-    <input type="text" id="message" />
-    <input type="button" value="Send" id="send" />
+    <div>Server Time: <span id="date"></span></div>
+    <form>
+        <input type="text" id="user" placeholder="user" required /><br />
+        <input type="text" id="message" placeholder="message" required /><br />
+        <button type="submit" id="send">Send</button>
+    </form>
     <ul id="messages">
     </ul>
 
@@ -11,7 +14,7 @@
     <script>
         (async function () {
             var connection = new signalR.HubConnectionBuilder()
-                .withUrl('/chat')
+                .withUrl('/chatHub')
                 .build();
 
             var clock = new signalR.HubConnectionBuilder()
@@ -22,16 +25,23 @@
                 document.getElementById('date').innerText = new Date(date);
             });
 
-            document.getElementById('send').addEventListener('click', () => {
-                var val = document.getElementById('message').value;
-                if (val) {
-                    connection.invoke('send', val);
+            document.getElementById('send').addEventListener('click', event => {
+                event.preventDefault();
+                var user = document.getElementById('user').value;
+                var message = document.getElementById('message').value;
+                if (user && message) {
+                    connection.invoke('sendmessage', user, message);
                 }
             });
 
-            connection.on('send', message => {
-                var li = document.createElement('li');
-                li.innerText = message;
+            connection.on('receivemessage', (user, message) => {
+                var msg = message
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                var encodedMsg = user + ' says ' + msg
+                var li = document.createElement('li')
+                li.textContent = encodedMsg;
                 document.getElementById('messages').appendChild(li);
             });
 
